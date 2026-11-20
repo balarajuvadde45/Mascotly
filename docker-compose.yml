@@ -1,0 +1,23 @@
+services:
+  mascot:
+    build: .
+    container_name: mascot
+    ports:
+      - "4242:4242"
+    environment:
+      - MASCOT_PORT=4242
+      # - MASCOT_ADMIN_KEY=change-me
+      # - MASCOT_LLM_PROVIDER=openai-compatible
+      # - MASCOT_LLM_BASE_URL=https://api.openai.com/v1
+      # - MASCOT_LLM_API_KEY=sk-...
+      # - MASCOT_LLM_MODEL=gpt-4o-mini
+      # - MASCOT_EMBEDDINGS_PROVIDER=openai
+      # - GITHUB_TOKEN=ghp_...   # higher GitHub API limits for repo ingestion
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4242/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

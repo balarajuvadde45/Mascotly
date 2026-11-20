@@ -1,0 +1,10 @@
+node_modules/
+data/
+integrations/docsify/docs/mascot-credentials.js
+*.log
+.env
+.env.local
+.DS_Store
+Thumbs.db
+dist/
+coverage/

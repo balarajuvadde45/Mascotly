@@ -1,0 +1,41 @@
+{
+  "name": "mascotly",
+  "version": "0.1.0",
+  "description": "Open-source embeddable AI mascot & agent for any application — drop in one script tag; the AI studies your app from docs, reviews, repos and (optionally) reverse-engineered artifacts via REA.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "mascotly": "bin/mascot.js",
+    "mascotly-mcp": "mcp/server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test \"test/*.test.mjs\"",
+    "check": "node bin/check-syntax.mjs"
+  },
+  "dependencies": {
+    "@vercel/functions": "^2.0.0",
+    "express": "^4.21.2"
+  },
+  "keywords": [
+    "mascotly",
+    "chatbot",
+    "widget",
+    "embeddable",
+    "ai-agent",
+    "rag",
+    "bm25",
+    "reverse-engineering",
+    "rea",
+    "web-component"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morluto/mascot"
+  }
+}

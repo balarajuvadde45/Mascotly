@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mascotly — the open-source AI mascot that lives inside any app</title>
+  <meta name="description" content="Self-hosted, embeddable AI assistant for any application. Mascotly studies your app from its docs, reviews and repos — and shipped artifacts via REA — then answers user questions with citations. Deploy on Vercel or your own server in minutes." />
+  <meta property="og:title" content="Mascotly — the open-source AI mascot that lives inside any app" />
+  <meta property="og:description" content="One script tag. A self-hosted AI mascot that studies your application and answers your users with citations." />
+  <meta name="theme-color" content="#0a0b12" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --accent: #7c6cff;
+      --accent2: #a78bfa;
+      --accent-teal: #4fd1c5;
+      --bg: #0a0b12;
+      --bg2: #12131d;
+      --bg3: #181a26;
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --text: #f2f3f7;
+      --muted: #8b90a0;
+      --good: #2ecc71;
+      --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-display: "Space Grotesk", "Inter", -apple-system, sans-serif;
+      /* pointer + scroll state consumed by the 3D layers (JS keeps these fresh) */
+      --mx: 0;            /* -1 .. 1 */
+      --my: 0;            /* -1 .. 1 */
+      --scroll: 0;        /* 0 .. 1 page progress */
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; font-family: var(--font-body);
+      background: var(--bg); color: var(--text); line-height: 1.65; overflow-x: hidden;
+    }
+    h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+    }
+    a { color: #a29bfe; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .inline { background: #0b0d1a; border-radius: 6px; padding: 2px 7px; font-size: 12.5px; color: #c7c9e8; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* ─────────────────────────────  3D background  ───────────────────────────── */
+    .bg3d { position: fixed; inset: 0; z-index: 0; pointer-events: none; perspective: 900px; overflow: hidden; }
+    #stars { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .orb {
+      position: absolute; border-radius: 50%; filter: blur(70px); opacity: .5;
+      transform: translate3d(calc(var(--mx) * 46px), calc(var(--my) * 34px), 0);
+      transition: transform .25s ease-out;
+    }
+    .orb1 { width: 480px; height: 480px; background: #4331b8; top: -140px; left: -120px; }
+    .orb2 { width: 420px; height: 420px; background: #1f6f5c; bottom: -160px; right: -100px; opacity: .35; }
+    .grid-floor {
+      position: absolute; left: -25%; right: -25%; bottom: -12%; height: 46%;
+      background:
+        linear-gradient(to top, rgba(124,108,255,.16), transparent 62%),
+        repeating-linear-gradient(to right, rgba(167,139,250,.14) 0 1px, transparent 1px 70px),
+        repeating-linear-gradient(to bottom, rgba(167,139,250,.14) 0 1px, transparent 1px 70px);
+      transform: perspective(620px) rotateX(64deg) translateZ(0);
+      transform-origin: bottom center;
+      mask-image: linear-gradient(to top, rgba(0,0,0,.85), transparent 78%);
+      -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,.85), transparent 78%);
+    }
+    .progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 90; background: transparent; }
+    .progress i { display: block; height: 100%; width: calc(var(--scroll) * 100%); background: linear-gradient(90deg, var(--accent2), var(--accent)); box-shadow: 0 0 12px var(--accent); }
+
+    /* ─────────────────────────────  header  ───────────────────────────── */
+    header.nav3d {
+      position: sticky; top: 0; z-index: 80;
+      background: rgba(15,17,32,.86); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+      transform-style: preserve-3d;
+    }
+    .nav { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; }
+    .logo { font-weight: 800; font-size: 17px; display: flex; gap: 10px; align-items: center; transform-style: preserve-3d; }
+    .logo .m {
+      background: linear-gradient(145deg, var(--accent2), var(--accent)); width: 32px; height: 32px; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 17px;
+      transform: translateZ(26px) rotateY(calc(var(--mx) * 14deg)) rotateX(calc(var(--my) * -10deg));
+      box-shadow: 0 6px 18px rgba(124,108,255,.45), inset 0 1px 0 rgba(255,255,255,.25);
+      transition: transform .2s ease-out;
+    }
+    nav.links { display: flex; align-items: center; }
+    nav.links a { margin-left: 20px; color: var(--muted); font-weight: 600; font-size: 13.5px; position: relative; }
+    nav.links a:hover { color: var(--text); text-decoration: none; }
+    nav.links a.cta { color: #fff; background: var(--accent); padding: 8px 16px; border-radius: 10px; margin-left: 24px;
+      box-shadow: 0 4px 14px rgba(124,108,255,.4); transition: transform .15s, box-shadow .15s; }
+    nav.links a.cta:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(124,108,255,.55); text-decoration: none; }
+
+    /* ─────────────────────────────  stage / reveal  ───────────────────────────── */
+    main { position: relative; z-index: 1; }
+    section { position: relative; }
+    .stage { perspective: 1400px; }
+    .reveal {
+      opacity: 0; transform: translateY(64px) rotateX(14deg) scale(.965);
+      transition: opacity .7s ease, transform .8s cubic-bezier(.16,.84,.28,1);
+      transform-style: preserve-3d;
+    }
+    .reveal.in { opacity: 1; transform: none; }
+
+    h2.section { text-align: center; font-size: 30px; margin: 70px 0 6px; letter-spacing: -.4px;
+      text-shadow: 0 1px 0 #23264a, 0 2px 0 #1d2040, 0 3px 0 #191c38, 0 10px 24px rgba(0,0,0,.5); }
+    p.section-sub { text-align: center; color: var(--muted); margin: 0 0 34px; }
+    .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 820px) { .grid3, .grid2 { grid-template-columns: 1fr; } }
+
+    .card3d {
+      position: relative; background: linear-gradient(160deg, var(--bg2), #131630 70%);
+      border: 1px solid var(--border); border-radius: 16px; padding: 24px;
+      transform-style: preserve-3d;
+      transition: transform .18s ease-out, box-shadow .18s ease-out, border-color .18s;
+      will-change: transform;
+    }
+    .card3d:hover { border-color: #3d4378; box-shadow: 0 22px 44px rgba(5,7,20,.6); z-index: 2; }
+    .card3d .glare {
+      position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0;
+      background: radial-gradient(420px circle at var(--gx, 50%) var(--gy, 50%), rgba(167,139,250,.16), transparent 55%);
+      transition: opacity .2s;
+    }
+    .card3d:hover .glare { opacity: 1; }
+    .card3d > * { transform: translateZ(22px); transform-style: preserve-3d; }
+    .card3d .ico { font-size: 22px; margin-bottom: 12px; display: block; }
+    .card3d h3 { margin: 0 0 8px; font-size: 15.5px; }
+    .card3d p { margin: 0; color: var(--muted); font-size: 13.5px; }
+    .card3d .n { display: inline-flex; width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(145deg, var(--accent2), var(--accent)); align-items: center; justify-content: center;
+      font-weight: 800; font-size: 14px; margin-bottom: 12px; box-shadow: 0 6px 14px rgba(124,108,255,.45); }
+
+    .btn3d {
+      position: relative; display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+      background: linear-gradient(145deg, var(--accent2), var(--accent)); color: #fff;
+      padding: 13px 26px; border-radius: 12px; font-weight: 700; font-size: 15px; border: none;
+      transform: translateZ(30px); box-shadow: 0 10px 24px rgba(124,108,255,.45), inset 0 1px 0 rgba(255,255,255,.3);
+      transition: transform .14s ease, box-shadow .14s ease;
+    }
+    .btn3d:hover { transform: translateZ(38px) translateY(-2px); box-shadow: 0 16px 34px rgba(124,108,255,.6), inset 0 1px 0 rgba(255,255,255,.3); text-decoration: none; }
+    .btn3d:active { transform: translateZ(16px) translateY(1px); box-shadow: 0 5px 14px rgba(124,108,255,.45); }
+    .btn3d.ghost { background: var(--bg2); border: 1px solid var(--border); color: var(--text); box-shadow: 0 8px 18px rgba(5,7,20,.5); }
+
+    /* ─────────────────────────────  hero  ───────────────────────────── */
+    .hero { min-height: 92vh; display: flex; align-items: center; padding: 60px 0 30px; }
+    .hero-grid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 30px; align-items: center; width: 100%; }
+    @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; } .hero { padding-top: 30px; } }
+    .hero-copy { transform-style: preserve-3d; }
+    .pill {
+      display: inline-flex; gap: 8px; align-items: center; font-size: 12.5px; font-weight: 700; color: var(--accent2);
+      border: 1px solid var(--border); background: rgba(23,26,46,.8); border-radius: 999px; padding: 7px 15px; letter-spacing: .3px;
+      transform: translateZ(20px);
+    }
+    .hero h1 {
+      font-size: clamp(34px, 4.6vw, 54px); line-height: 1.12; letter-spacing: -.8px; margin: 20px 0 16px;
+      transform: rotateX(calc(var(--my) * 3deg)) rotateY(calc(var(--mx) * -4deg)) translateZ(40px);
+      transform-style: preserve-3d; transition: transform .2s ease-out;
+      text-shadow: 0 1px 0 #262a52, 0 2px 0 #22264c, 0 3px 0 #1e2246, 0 4px 0 #1a1e40, 0 14px 30px rgba(0,0,0,.55);
+    }
+    .hero h1 em { font-style: normal; background: linear-gradient(90deg, #a29bfe, #6c5ce7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero p.sub { color: var(--muted); font-size: 17px; max-width: 600px; margin: 0 0 28px; transform: translateZ(24px); }
+    .cta-row { display: flex; gap: 14px; flex-wrap: wrap; transform: translateZ(28px); }
+    .terminal {
+      background: rgba(11,13,26,.92); border: 1px solid var(--border); border-radius: 14px; max-width: 740px;
+      text-align: left; overflow: hidden; transform: translateZ(34px) rotateY(calc(var(--mx) * 3deg));
+      box-shadow: 0 24px 50px rgba(5,7,20,.6); transition: transform .2s ease-out; margin-top: 34px;
+    }
+    .terminal .bar { display: flex; gap: 6px; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+    .terminal .bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--border); display: block; }
+    .terminal pre { margin: 0; padding: 18px 20px; font-size: 13px; color: #c7c9e8; overflow-x: auto; line-height: 1.7; }
+    .terminal .c { color: #6b6b8f; }
+    .scroll-cue { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); color: var(--muted); font-size: 11.5px; text-align: center; }
+    .scroll-cue .mouse { width: 20px; height: 32px; border: 2px solid var(--muted); border-radius: 11px; margin: 0 auto 6px; position: relative; }
+    .scroll-cue .mouse::after { content: ""; position: absolute; left: 50%; top: 6px; width: 3px; height: 7px; margin-left: -1.5px; border-radius: 3px; background: var(--accent2); animation: wheel 1.8s ease-in-out infinite; }
+    @keyframes wheel { 0% { transform: translateY(0); opacity: 1; } 70% { transform: translateY(10px); opacity: 0; } 100% { opacity: 0; } }
+
+    /* ─────────────────────────────  the 3D robot mascot  ───────────────────────────── */
+    .mascot-scene { perspective: 900px; display: flex; justify-content: center; align-items: flex-end; min-height: 420px; position: relative; }
+    .hero-gl { position: absolute; inset: -8% -14%; width: 128%; height: 116%; z-index: 0; }
+    .mascot-tilt { transform-style: preserve-3d; transform: rotateY(calc(var(--mx) * 14deg)) rotateX(calc(var(--my) * -9deg)); transition: transform .18s ease-out; position: relative; z-index: 1; }
+    .mascot { position: relative; width: 210px; transform-style: preserve-3d; animation: float 4.6s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+    .ring { position: absolute; left: 50%; border-radius: 50%; border: 2px solid rgba(167,139,250,.3); transform-style: preserve-3d; }
+    .ring.r1 { width: 300px; height: 300px; bottom: -40px; transform: translateX(-50%) rotateX(76deg); animation: ringspin 9s linear infinite; }
+    .ring.r2 { width: 380px; height: 380px; bottom: -60px; border-color: rgba(124,108,255,.18); transform: translateX(-50%) rotateX(76deg); animation: ringspin 14s linear infinite reverse; }
+    @keyframes ringspin { from { transform: translateX(-50%) rotateX(76deg) rotateZ(0); } to { transform: translateX(-50%) rotateX(76deg) rotateZ(360deg); } }
+    .ring i { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--accent2); top: -6px; left: 50%; box-shadow: 0 0 12px var(--accent2); }
+    .bot { position: relative; transform-style: preserve-3d; }
+    .antenna { position: relative; width: 4px; height: 26px; margin: 0 auto; background: linear-gradient(#3d4378, var(--accent2)); border-radius: 3px; transform: translateZ(26px); }
+    .antenna b { position: absolute; top: -12px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fff, var(--accent2) 45%, var(--accent)); box-shadow: 0 0 16px var(--accent2); animation: glow 2.2s ease-in-out infinite; }
+    @keyframes glow { 0%, 100% { box-shadow: 0 0 10px var(--accent2); } 50% { box-shadow: 0 0 26px var(--accent2), 0 0 44px rgba(167,139,250,.5); } }
+    .head {
+      position: relative; width: 150px; height: 118px; margin: 0 auto; border-radius: 34px;
+      background: linear-gradient(160deg, #2c3160, #1a1e40 60%); border: 1px solid #3d4378;
+      transform: translateZ(34px); transform-style: preserve-3d;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,.12), 0 18px 34px rgba(5,7,20,.55);
+    }
+    .face {
+      position: absolute; inset: 18px 16px 22px; border-radius: 22px; background: linear-gradient(160deg, #0c0e1e, #141733);
+      border: 1px solid #2a2e4d; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 18px;
+      animation: blink 4.8s ease-in-out infinite;
+    }
+    @keyframes blink { 0%, 44%, 56%, 100% { transform: scaleY(1); } 48%, 52% { transform: scaleY(.08); } }
+    .eye { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 38% 32%, #ffffff 58%, #c9c6ff 78%, var(--accent2)); position: relative; box-shadow: 0 0 14px rgba(167,139,250,.75); }
+    .eye .pupil { position: absolute; left: 50%; top: 50%; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%;
+      background: #141733; transform: translate(calc(var(--mx) * 7px), calc(var(--my) * 6px)); transition: transform .12s ease-out; }
+    .ear { position: absolute; top: 34px; width: 14px; height: 44px; border-radius: 8px; background: linear-gradient(#3d4378, #23274d); border: 1px solid #454b8a; }
+    .ear.l { left: -16px; transform: translateZ(-6px) rotateY(-24deg); }
+    .ear.r { right: -16px; transform: translateZ(-6px) rotateY(24deg); }
+    .neck { width: 34px; height: 12px; margin: 0 auto; background: linear-gradient(#3d4378, #23274d); border-radius: 0 0 6px 6px; transform: translateZ(18px); }
+    .body {
+      position: relative; width: 120px; height: 104px; margin: 0 auto; border-radius: 26px 26px 20px 20px;
+      background: linear-gradient(165deg, #2c3160, #191c3c 65%); border: 1px solid #3d4378;
+      transform: translateZ(16px); transform-style: preserve-3d;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,.1), 0 18px 30px rgba(5,7,20,.5);
+    }
+    .chest {
+      position: absolute; inset: 22px 24px 30px; border-radius: 14px; background: #0c0e1e; border: 1px solid #2a2e4d;
+      display: flex; align-items: center; justify-content: center; gap: 7px; overflow: hidden;
+    }
+    .chest .led { width: 12px; height: 12px; border-radius: 50%; background: var(--accent2); box-shadow: 0 0 10px var(--accent2); animation: led 1.6s ease-in-out infinite; }
+    .chest .led.d2 { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; animation-delay: .4s; }
+    .chest .led.d3 { background: #f39c12; box-shadow: 0 0 10px #f39c12; animation-delay: .8s; }
+    @keyframes led { 0%, 100% { opacity: .35; transform: scale(.85); } 50% { opacity: 1; transform: scale(1.12); } }
+    .arm { position: absolute; top: 20px; width: 18px; height: 64px; border-radius: 10px; background: linear-gradient(#3d4378, #1e2246); border: 1px solid #454b8a; transform-origin: top center; }
+    .arm.l { left: -26px; transform: translateZ(-4px) rotateZ(8deg); animation: waveL 3.4s ease-in-out infinite; }
+    .arm.r { right: -26px; transform: translateZ(-4px) rotateZ(-8deg); animation: waveR 3.4s ease-in-out infinite .6s; }
+    @keyframes waveL { 0%, 100% { transform: translateZ(-4px) rotateZ(9deg); } 50% { transform: translateZ(4px) rotateZ(-14deg); } }
+    @keyframes waveR { 0%, 100% { transform: translateZ(-4px) rotateZ(-9deg); } 50% { transform: translateZ(4px) rotateZ(14deg); } }
+    .legs { display: flex; justify-content: center; gap: 22px; margin-top: -4px; }
+    .legs i { width: 22px; height: 26px; border-radius: 8px 8px 12px 12px; background: linear-gradient(#23274d, #1a1e40); border: 1px solid #3d4378; }
+    .shadow { position: absolute; left: 50%; bottom: -34px; width: 170px; height: 26px; margin-left: -85px; border-radius: 50%;
+      background: radial-gradient(ellipse at center, rgba(5,7,20,.65), transparent 70%); animation: shd 4.6s ease-in-out infinite; }
+    @keyframes shd { 0%, 100% { transform: scale(1); opacity: .8; } 50% { transform: scale(.82); opacity: .5; } }
+
+    /* rotating 3D logo cube */
+    .cube-scene { position: absolute; right: 4%; top: 6%; width: 130px; height: 130px; perspective: 640px; opacity: .85; }
+    .cube { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; animation: cubespins 22s linear infinite; }
+    @keyframes cubespins { from { transform: rotateX(-18deg) rotateY(0); } to { transform: rotateX(-18deg) rotateY(360deg); } }
+    .cube i { position: absolute; inset: 0; border: 1px solid rgba(167,139,250,.5); border-radius: 14px;
+      background: linear-gradient(160deg, rgba(124,108,255,.32), rgba(23,26,46,.55));
+      display: flex; align-items: center; justify-content: center; font-size: 40px; backface-visibility: visible;
+      box-shadow: inset 0 0 30px rgba(124,108,255,.25); }
+    .cube i:nth-child(1) { transform: translateZ(65px); }
+    .cube i:nth-child(2) { transform: rotateY(180deg) translateZ(65px); }
+    .cube i:nth-child(3) { transform: rotateY(90deg) translateZ(65px); }
+    .cube i:nth-child(4) { transform: rotateY(-90deg) translateZ(65px); }
+    .cube i:nth-child(5) { transform: rotateX(90deg) translateZ(65px); }
+    .cube i:nth-child(6) { transform: rotateX(-90deg) translateZ(65px); }
+
+    .floaters { position: absolute; inset: 0; pointer-events: none; }
+    .floater { position: absolute; font-size: 26px; opacity: .8;
+      transform: translate3d(calc(var(--mx) * var(--fd, 30px)), calc(var(--my) * var(--fd, 24px)), 0);
+      transition: transform .3s ease-out; animation: bob 5s ease-in-out infinite; }
+    @keyframes bob { 0%, 100% { margin-top: 0; } 50% { margin-top: -14px; } }
+
+    .frameworks { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; padding: 30px 0 0; }
+    .frameworks span { border: 1px solid var(--border); background: rgba(23,26,46,.8); color: var(--muted); font-size: 12.5px; font-weight: 600; border-radius: 999px; padding: 6px 14px;
+      transform: translateZ(18px); transition: transform .15s, color .15s; }
+    .frameworks span:hover { transform: translateZ(26px) translateY(-2px); color: var(--text); }
+
+    /* peeking mini bots in step cards */
+    .peek { position: absolute; right: 14px; bottom: -6px; width: 64px; height: 44px; pointer-events: none; transform: translateZ(30px); }
+    .peek .phead { position: absolute; bottom: 0; left: 6px; width: 44px; height: 34px; border-radius: 12px 12px 6px 6px;
+      background: linear-gradient(160deg, #2c3160, #1a1e40); border: 1px solid #3d4378; transform-origin: bottom center;
+      animation: peek 6s ease-in-out infinite; }
+    .peek .phead::after { content: ""; position: absolute; inset: 7px 6px 8px; border-radius: 8px; background: #0c0e1e; border: 1px solid #2a2e4d; }
+    .peek .phead::before { content: ""; position: absolute; top: -8px; left: 50%; width: 3px; height: 8px; margin-left: -1.5px; background: var(--accent2); border-radius: 2px; }
+    @keyframes peek { 0%, 38%, 62%, 100% { transform: translateY(12px); } 50% { transform: translateY(0) rotate(-4deg); } }
+    .peek.b .phead { animation-delay: 2s; } .peek.c .phead { animation-delay: 4s; }
+
+    /* ─────────────────────────────  sections  ───────────────────────────── */
+    .agents-wrap { max-width: 780px; margin: 0 auto; perspective: 1100px; }
+    .agent-tabs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 0; }
+    .agent-tabs button { background: var(--bg2); border: 1px solid var(--border); color: var(--muted); padding: 9px 17px; border-radius: 10px; cursor: pointer;
+      font-weight: 700; font-size: 13px; font-family: inherit; transform: translateZ(14px); transition: all .15s; }
+    .agent-tabs button:hover { color: var(--text); transform: translateZ(22px) translateY(-2px); }
+    .agent-tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 8px 20px rgba(124,108,255,.45); }
+    .agent-panel { margin-top: 18px; }
+    .agent-panel pre { background: rgba(11,13,26,.94); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; font-size: 13px; color: #c7c9e8;
+      overflow-x: auto; line-height: 1.7; transform: translateZ(26px) rotateY(calc(var(--mx) * 2deg)); box-shadow: 0 20px 44px rgba(5,7,20,.55); transition: transform .2s ease-out; }
+    .agent-note { text-align: center; color: var(--muted); font-size: 13px; margin-top: 16px; }
+
+    pre.code3d {
+      background: rgba(11,13,26,.94); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; font-size: 13px; color: #c7c9e8;
+      overflow-x: auto; max-width: 760px; margin: 26px auto; line-height: 1.7;
+      transform: translateZ(26px) rotateY(calc(var(--mx) * -2.4deg)) rotateX(calc(var(--my) * 1.6deg));
+      box-shadow: 0 22px 48px rgba(5,7,20,.6); transition: transform .2s ease-out;
+    }
+
+    .deploy-grid .card3d h3 { display: flex; gap: 9px; align-items: center; }
+    .deploy-grid ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); font-size: 13.5px; }
+    .deploy-grid ol li { margin: 6px 0; }
+    .deploy-grid .tag { font-size: 10.5px; font-weight: 800; letter-spacing: .6px; border-radius: 6px; padding: 3px 8px; }
+    .deploy-grid .tag.rec { background: rgba(46,204,113,.15); color: #2ecc71; }
+    .deploy-grid .tag.alt { background: var(--bg3); color: var(--muted); }
+
+    details.faq { max-width: 760px; margin: 0 auto 10px; background: linear-gradient(160deg, var(--bg2), #131630); border: 1px solid var(--border); border-radius: 12px; padding: 0 18px; transform-style: preserve-3d; transition: transform .15s, border-color .15s; }
+    details.faq[open] { border-color: #3d4378; transform: translateZ(16px); }
+    details.faq summary { cursor: pointer; font-weight: 700; padding: 15px 0; font-size: 14.5px; }
+    details.faq p { color: var(--muted); font-size: 13.5px; margin: 0 0 15px; }
+
+    footer { border-top: 1px solid var(--border); margin-top: 80px; padding: 38px 0 30px; text-align: center; color: var(--muted); font-size: 13px; position: relative; }
+    footer .wavebot { position: absolute; top: -34px; left: 50%; margin-left: -26px; width: 52px; height: 40px; }
+    footer .wavebot .phead { position: absolute; bottom: 0; left: 4px; width: 36px; height: 28px; border-radius: 10px 10px 5px 5px;
+      background: linear-gradient(160deg, #2c3160, #1a1e40); border: 1px solid #3d4378; animation: peek 6s ease-in-out infinite; }
+    footer .wavebot .phead::after { content: ""; position: absolute; inset: 6px 5px 7px; border-radius: 7px; background: #0c0e1e; border: 1px solid #2a2e4d; }
+    footer .cols { display: flex; gap: 44px; justify-content: center; flex-wrap: wrap; margin: 20px 0 16px; }
+    footer .cols a { color: var(--muted); display: block; margin: 4px 0; font-size: 12.5px; }
+    footer .cols a:hover { color: var(--text); }
+
+    /* accessibility */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .reveal { opacity: 1; transform: none; }
+      html { scroll-behavior: auto; }
+    }
+    @media (max-width: 640px) {
+      .mascot-scene { min-height: 320px; }
+      .mascot { transform: scale(.72); }
+      .cube-scene { display: none; }
+      nav.links a { margin-left: 12px; }
+      nav.links a.cta { margin-left: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- fixed 3D background: depth starfield + parallax orbs + perspective grid -->
+  <div class="bg3d" aria-hidden="true">
+    <canvas id="stars"></canvas>
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="grid-floor"></div>
+  </div>
+  <div class="progress" aria-hidden="true"><i></i></div>
+
+  <header class="nav3d">
+    <div class="wrap nav">
+      <div class="logo"><span class="m">🤖</span> Mascotly</div>
+      <nav class="links">
+        <a href="#how">How it works</a>
+        <a href="#agents">Agents</a>
+        <a href="#deploy">Deploy</a>
+        <a href="https://github.com/morluto/mascot" target="_blank" rel="noopener">GitHub ↗</a>
+        <a class="cta" href="/dashboard/">Dashboard</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="stage">
+    <!-- ───────────────── hero with the 3D mascot ───────────────── -->
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div class="mascot-scene" aria-hidden="true">
+          <canvas id="hero-gl" class="hero-gl"></canvas>
+          <div class="floaters">
+            <span class="floater" style="--fd: 44px; top: 4%; left: 6%;">🛸</span>
+            <span class="floater" style="--fd: 26px; top: 16%; right: 2%; animation-delay: 1.2s;">👾</span>
+            <span class="floater" style="--fd: 34px; bottom: 18%; left: -2%; animation-delay: 2.1s;">✨</span>
+          </div>
+          <div class="cube-scene"><div class="cube"><i>🤖</i><i>📚</i><i>⚡</i><i>🔎</i><i>🧠</i><i>🔌</i></div></div>
+          <div class="mascot-tilt">
+            <div class="mascot">
+              <div class="ring r1"><i></i></div>
+              <div class="ring r2"><i style="left: 18%;"></i></div>
+              <div class="bot">
+                <div class="antenna"><b></b></div>
+                <div class="head">
+                  <div class="face">
+                    <div class="eye"><i class="pupil"></i></div>
+                    <div class="eye"><i class="pupil"></i></div>
+                  </div>
+                  <div class="ear l"></div><div class="ear r"></div>
+                </div>
+                <div class="neck"></div>
+                <div class="body">
+                  <div class="chest"><i class="led"></i><i class="led d2"></i><i class="led d3"></i></div>
+                  <div class="arm l"></div><div class="arm r"></div>
+                </div>
+                <div class="legs"><i></i><i></i></div>
+              </div>
+              <div class="shadow"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-copy">
+          <span class="pill">🛡 self-hosted · MIT · no vendor lock-in</span>
+          <h1>One script tag.<br />An AI mascot that <em>studies your app</em>.</h1>
+          <p class="sub">Mascotly ingests your documentation, reviews and repositories — even shipped artifacts, via REA — builds its own knowledge base and app profile, and answers your users' questions with citations. Any LLM, or fully offline.</p>
+          <div class="cta-row">
+            <a class="btn3d" href="/dashboard/">Open dashboard →</a>
+            <a class="btn3d ghost" href="#deploy">Deploy on Vercel</a>
+          </div>
+          <div class="terminal">
+            <div class="bar"><i></i><i></i><i></i></div>
+            <pre><span class="c"># self-host in under a minute</span>
+git clone https://github.com/morluto/mascot && cd mascot
+npm install && npm start
+<span class="c"># → dashboard on http://localhost:4242/dashboard</span></pre>
+          </div>
+        </div>
+      </div>
+      <div class="scroll-cue"><div class="mouse"></div>scroll to explore</div>
+      <div class="frameworks reveal">
+        <span>React</span><span>Vue</span><span>Angular</span><span>Svelte</span><span>Next.js</span><span>Electron</span><span>plain HTML</span><span>docs sites</span>
+      </div>
+    </section>
+
+    <!-- ───────────────── how it works ───────────────── -->
+    <section id="how">
+      <div class="wrap">
+        <h2 class="section reveal">How it works</h2>
+        <p class="section-sub reveal">Mascotly builds its own brain — you never write flows or training data.</p>
+        <div class="grid3">
+          <div class="card3d tilt reveal"><span class="glare"></span>
+            <span class="n">1</span><span class="ico">📚</span><h3>Feed it your app</h3>
+            <p>Docs URLs, sitemap crawls, GitHub repos, uploaded files, pasted text, review dumps. The crawler is robots-aware; GitHub ingestion reads README + docs trees.</p>
+            <div class="peek" aria-hidden="true"><span class="phead"></span></div>
+          </div>
+          <div class="card3d tilt reveal"><span class="glare"></span>
+            <span class="n">2</span><span class="ico">🧠</span><h3>The analyzer studies it</h3>
+            <p>An LLM map-reduce (or a fully offline extractive engine) synthesizes an app profile — purpose, features, limitations, FAQs — that becomes the mascot's identity, with starter questions.</p>
+            <div class="peek b" aria-hidden="true"><span class="phead"></span></div>
+          </div>
+          <div class="card3d tilt reveal"><span class="glare"></span>
+            <span class="n">3</span><span class="ico">⚡</span><h3>Embed one tag</h3>
+            <p>A dependency-free Web Component appears in any framework. Streaming answers, citation chips, starter suggestions, host actions, escalation — all style-isolated by Shadow DOM.</p>
+            <div class="peek c" aria-hidden="true"><span class="phead"></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────── features ───────────────── -->
+    <section>
+      <div class="wrap">
+        <h2 class="section reveal">Everything included</h2>
+        <p class="section-sub reveal">A complete assistant platform, not just a chat bubble.</p>
+        <div class="grid3">
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🔎</span><h3>Hybrid retrieval</h3><p>BM25 fused with TF-IDF cosine vectors out of the box — zero external services. Add OpenAI-compatible or Ollama embeddings when you want semantic search.</p></div>
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🧩</span><h3>Host actions</h3><p>Register functions in your app and the mascot triggers them mid-conversation — navigation, dialogs, ticket drafting — through a safe, validated JSON protocol.</p></div>
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🔌</span><h3>Any LLM</h3><p>OpenAI-compatible APIs (OpenAI, Groq, Together, vLLM, LM Studio), Anthropic, Ollama — plus a deterministic offline brain for CI, demos and air-gapped use.</p></div>
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🛡</span><h3>Production safety</h3><p>Per-app keys, origin allowlists, sliding-window rate limits, timing-safe auth, escape-first rendering, sandboxed subprocess execution for REA.</p></div>
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🧾</span><h3>Full visibility</h3><p>Admin dashboard with session transcripts, escalation flags, feedback ratings, retrieval testing, job progress, per-app model overrides and key rotation.</p></div>
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🔬</span><h3>REA integration</h3><p>Point Mascotly at an Electron bundle, ASAR archive or JS tree: the Reverse-Engineering-Anything CLI extracts modules, entry points and features into knowledge.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────── agents ───────────────── -->
+    <section id="agents">
+      <div class="wrap">
+        <h2 class="section reveal">Install through your agent</h2>
+        <p class="section-sub reveal">Mascotly ships an MCP server and an agent skill — Claude Code, Codex, Cursor, Windsurf and Gemini CLI can set everything up for you.</p>
+        <div class="agents-wrap reveal">
+          <div class="agent-tabs" id="agent-tabs">
+            <button data-agent="claude" class="active">Claude Code</button>
+            <button data-agent="codex">Codex CLI</button>
+            <button data-agent="cursor">Cursor</button>
+            <button data-agent="windsurf">Windsurf</button>
+            <button data-agent="gemini">Gemini CLI</button>
+            <button data-agent="manual">Manual MCP</button>
+          </div>
+          <div class="agent-panel">
+            <pre id="agent-cmd">git clone https://github.com/morluto/mascot && cd mascot
+npm install
+
+# register the Mascotly MCP server with Claude Code (creates a backup first)
+node bin/mascot.js setup --client claude_code --install-skill
+
+# then just ask your agent:
+#   "Add a mascot to my app at ~/projects/myapp" ← it does the rest</pre>
+          </div>
+          <p class="agent-note">Agents get tools like <span class="inline">mascot_create_app</span>, <span class="inline">mascot_add_source</span>, <span class="inline">mascot_analyze</span> and <span class="inline">mascot_embed_snippet</span> — the full workflow from docs ingestion to embed snippet.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────── embed ───────────────── -->
+    <section id="embed">
+      <div class="wrap">
+        <h2 class="section reveal">The embed</h2>
+        <p class="section-sub reveal">This is the whole integration.</p>
+        <pre class="code3d reveal">&lt;script src="https://your-mascot-host/widget/mascot-widget.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  window.Mascotly.init({
+    server: 'https://your-mascot-host',
+    appId:  'app_xxxxxxxxxxxx',      // from the dashboard
+    publicKey: 'pk_xxxxxxxxxxxxxxxx'
+  });
+
+  // optional: let the mascot drive your app
+  window.Mascotly.registerAction('navigate', (args) =&gt; {
+    window.location.href = args.url;
+  });
+&lt;/script&gt;</pre>
+      </div>
+    </section>
+
+    <!-- ───────────────── deploy ───────────────── -->
+    <section id="deploy">
+      <div class="wrap">
+        <h2 class="section reveal">Deploy</h2>
+        <p class="section-sub reveal">Serverless or self-hosted — same codebase, one environment switch.</p>
+        <div class="grid2 deploy-grid">
+          <div class="card3d tilt reveal"><span class="glare"></span>
+            <h3>▲ Vercel <span class="tag rec">SERVERLESS</span></h3>
+            <ol>
+              <li>Push the repo to GitHub and import it in Vercel — zero config (<span class="inline">vercel.json</span> included).</li>
+              <li>Add a <b>Vercel KV</b> store (Marketplace → KV) — Mascotly auto-detects it for persistent storage.</li>
+              <li>Optional env: <span class="inline">MASCOT_LLM_API_KEY</span>, <span class="inline">MASCOT_ADMIN_KEY</span>, <span class="inline">GITHUB_TOKEN</span>.</li>
+              <li>Deploy. The dashboard, widget CDN and API are live on your domain.</li>
+            </ol>
+            <p style="margin-top:12px">Note: long crawls and REA need the self-hosted mode; on serverless they are capped.</p>
+          </div>
+          <div class="card3d tilt reveal"><span class="glare"></span>
+            <h3>🐳 Docker / VPS <span class="tag alt">FULL MODE</span></h3>
+            <ol>
+              <li><span class="inline">docker compose up</span> — or <span class="inline">npm start</span> on any Node ≥ 18 host.</li>
+              <li>File-backed storage with atomic writes; back up the <span class="inline">data/</span> directory.</li>
+              <li>Unlimited crawl depth, background jobs, and full REA reverse engineering.</li>
+              <li>Put nginx/Caddy with TLS in front; disable proxy buffering for SSE.</li>
+            </ol>
+            <p style="margin-top:12px">Same dashboard, same widget, same API — switch by moving the workload.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────── faq ───────────────── -->
+    <section>
+      <div class="wrap">
+        <h2 class="section reveal">FAQ</h2>
+        <p class="section-sub reveal">Everything else you might be wondering.</p>
+        <div class="reveal">
+          <details class="faq"><summary>Does it work without any LLM API key?</summary><p>Yes. Mascotly ships a deterministic offline brain: answers are composed from retrieved knowledge with citations, the analyzer runs an extractive engine, and retrieval is fully local (BM25 + TF-IDF vectors). Add any OpenAI-compatible, Anthropic or Ollama endpoint when you want conversational depth.</p></details>
+          <details class="faq"><summary>Where does my data live?</summary><p>Wherever you deploy. File mode keeps everything in a <span class="inline">data/</span> directory you control; serverless mode uses your own Vercel KV / Upstash instance. Mascotly phones home to nobody.</p></details>
+          <details class="faq"><summary>How does it avoid making things up?</summary><p>Answers are grounded in retrieved knowledge with inline [n] citations; the prompt forbids invention, unknowns are stated honestly, and the retrieval tester lets you audit exactly what the mascot knows.</p></details>
+          <details class="faq"><summary>What is REA integration?</summary><p>REA (Reverse Engineer Anything) analyzes shipped artifacts — Electron bundles, ASAR archives, JavaScript trees — locally, without source. Mascotly folds its findings (modules, entry points, stack, features) into the mascot's knowledge. See <a href="https://github.com/morluto/rea" target="_blank" rel="noopener">morluto/rea</a>.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wavebot" aria-hidden="true"><span class="phead"></span></div>
+      <div class="wrap">
+        <div class="cols">
+          <div><b>Product</b><a href="/dashboard/">Dashboard</a><a href="#how">How it works</a><a href="#agents">Agent setup</a></div>
+          <div><b>Resources</b><a href="https://github.com/morluto/mascot" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/morluto/mascot/tree/main/docs" target="_blank" rel="noopener">Documentation</a><a href="https://github.com/morluto/mascot/issues" target="_blank" rel="noopener">Issues</a></div>
+          <div><b>Related</b><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA — morluto/rea</a></div>
+        </div>
+        <div>Mascotly — MIT licensed. Built for teams who want their assistant to actually know their product.</div>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    /* ═══════════════════ 3D engine: pointer + scroll drive the scene ═══════════════════ */
+    (function () {
+      'use strict';
+      var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var root = document.documentElement;
+
+      /* pointer parallax → CSS vars */
+      var mx = 0, my = 0, tmx = 0, tmy = 0;
+      window.addEventListener('pointermove', function (e) {
+        tmx = (e.clientX / window.innerWidth) * 2 - 1;
+        tmy = (e.clientY / window.innerHeight) * 2 - 1;
+      }, { passive: true });
+
+      /* scroll progress */
+      var scroll = 0;
+      function readScroll() {
+        var max = document.documentElement.scrollHeight - window.innerHeight;
+        scroll = max > 0 ? Math.min(1, window.scrollY / max) : 0;
+      }
+      window.addEventListener('scroll', readScroll, { passive: true });
+      readScroll();
+
+      /* ── depth starfield ── */
+      var canvas = document.getElementById('stars');
+      var ctx = canvas.getContext('2d');
+      var stars = [];
+      var W = 0, H = 0;
+      function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+      var COLORS = ['rgba(167,139,250,', 'rgba(124,108,255,', 'rgba(232,232,244,', 'rgba(46,204,113,'];
+      for (var i = 0; i < 170; i++) {
+        stars.push({
+          x: Math.random(), y: Math.random(),
+          z: 0.25 + Math.random() * 0.75,          // depth: small = far
+          r: 0.4 + Math.random() * 1.6,
+          c: COLORS[(Math.random() * COLORS.length) | 0],
+          tw: Math.random() * Math.PI * 2,          // twinkle phase
+          ts: 0.4 + Math.random() * 1.6,            // twinkle speed
+          vx: (Math.random() - 0.5) * 0.008
+        });
+      }
+      var lastScrollY = window.scrollY;
+      var starScroll = 0;
+
+      /* ── render loop ── */
+      var frame = 0;
+      function loop() {
+        frame++;
+        // ease pointer toward target (feels physical)
+        mx += (tmx - mx) * 0.07;
+        my += (tmy - my) * 0.07;
+        root.style.setProperty('--mx', mx.toFixed(4));
+        root.style.setProperty('--my', my.toFixed(4));
+        root.style.setProperty('--scroll', scroll.toFixed(4));
+
+        // starfield: depth layers drift with pointer + scroll velocity
+        var dy = (window.scrollY - lastScrollY);
+        lastScrollY = window.scrollY;
+        starScroll += dy * 0.0022;
+
+        ctx.clearRect(0, 0, W, H);
+        for (var i = 0; i < stars.length; i++) {
+          var s = stars[i];
+          s.tw += 0.02 * s.ts;
+          s.x += s.vx * s.z;
+          if (s.x < -0.02) s.x = 1.02; if (s.x > 1.02) s.x = -0.02;
+          var px = s.x * W + mx * 26 * s.z;
+          var py = ((s.y * H + starScroll * 140 * s.z) % (H + 40) + H + 40) % (H + 40) - 20 + my * 18 * s.z;
+          var alpha = (0.35 + 0.55 * s.z) * (0.6 + 0.4 * Math.sin(s.tw));
+          ctx.beginPath();
+          ctx.arc(px, py, s.r * (0.7 + s.z * 0.8), 0, Math.PI * 2);
+          ctx.fillStyle = s.c + alpha.toFixed(3) + ')';
+          ctx.fill();
+        }
+        if (!reduceMotion) requestAnimationFrame(loop);
+      }
+      if (reduceMotion) {
+        loop(); // draw one static frame
+      } else {
+        requestAnimationFrame(loop);
+      }
+
+      /* ── scroll reveal (3D entrance) ── */
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+      document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+
+      /* ── 3D tilt cards + glare ── */
+      document.querySelectorAll('.tilt').forEach(function (card) {
+        if (reduceMotion) return;
+        card.addEventListener('pointermove', function (e) {
+          var r = card.getBoundingClientRect();
+          var px = (e.clientX - r.left) / r.width;
+          var py = (e.clientY - r.top) / r.height;
+          card.style.transform =
+            'perspective(900px) rotateY(' + ((px - 0.5) * 10).toFixed(2) + 'deg) rotateX(' + ((0.5 - py) * 8).toFixed(2) + 'deg) translateZ(14px)';
+          card.style.setProperty('--gx', (px * 100).toFixed(1) + '%');
+          card.style.setProperty('--gy', (py * 100).toFixed(1) + '%');
+        });
+        card.addEventListener('pointerleave', function () { card.style.transform = ''; });
+      });
+
+      /* ── agent install tabs (content is static and XSS-safe) ── */
+      var cmds = {
+        claude: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register the Mascotly MCP server with Claude Code (creates a backup first)', 'node bin/mascot.js setup --client claude_code --install-skill', '', '# then just ask your agent:', '#   "Add a mascot to my app at ~/projects/myapp" ← it does the rest'].join('\n'),
+        codex: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register with Codex CLI (appends to ~/.codex/config.toml, backup first)', 'node bin/mascot.js setup --client codex --install-skill'].join('\n'),
+        cursor: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register with Cursor (writes ~/.cursor/mcp.json, backup first)', 'node bin/mascot.js setup --client cursor --install-skill'].join('\n'),
+        windsurf: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register with Windsurf (writes ~/.codeium/windsurf/mcp_config.json)', 'node bin/mascot.js setup --client windsurf --install-skill'].join('\n'),
+        gemini: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register with Gemini CLI (writes ~/.gemini/settings.json)', 'node bin/mascot.js setup --client gemini_cli --install-skill'].join('\n'),
+        manual: ['# Any MCP-capable client (stdio transport):', '{', '  "mcpServers": {', '    "mascot": {', '      "command": "node",', '      "args": ["/absolute/path/to/mascot/mcp/server.js"]', '    }', '  }', '}', '', '# Tools: mascot_create_app, mascot_add_source, mascot_analyze,', '# mascot_search, mascot_chat, mascot_embed_snippet, mascot_rea …'].join('\n')
+      };
+      var tabs = document.getElementById('agent-tabs');
+      var out = document.getElementById('agent-cmd');
+      if (tabs && out) {
+        tabs.addEventListener('click', function (e) {
+          var btn = e.target.closest('button');
+          if (!btn) return;
+          tabs.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          out.textContent = cmds[btn.dataset.agent] || '';
+        });
+      }
+    })();
+  </script>
+
+  <!-- ── WebGL "knowledge core" behind the mascot (vendored three.js, GPU points) ── -->
+  <script type="module">
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let container;
+    try {
+      container = document.getElementById('hero-gl');
+      if (!container || reduceMotion) throw new Error('skip');
+      const THREE = await import('/vendor/three.module.min.js');
+
+      const renderer = new THREE.WebGLRenderer({ canvas: container, alpha: true, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+      camera.position.set(0, 0, 6.4);
+
+      const group = new THREE.Group();
+      scene.add(group);
+
+      // GPU points shell — fibonacci sphere, additive gradient accent → teal
+      const COUNT = 3200;
+      const positions = new Float32Array(COUNT * 3);
+      const colors = new Float32Array(COUNT * 3);
+      const c1 = new THREE.Color('#7c6cff');
+      const c2 = new THREE.Color('#4fd1c5');
+      const golden = Math.PI * (3 - Math.sqrt(5));
+      for (let i = 0; i < COUNT; i++) {
+        const y = 1 - (i / (COUNT - 1)) * 2;
+        const r = Math.sqrt(Math.max(0, 1 - y * y));
+        const th = golden * i;
+        positions[i * 3] = Math.cos(th) * r * 2.6;
+        positions[i * 3 + 1] = y * 2.6;
+        positions[i * 3 + 2] = Math.sin(th) * r * 2.6;
+        const c = c1.clone().lerp(c2, (i / COUNT) * 0.9 + Math.random() * 0.1);
+        colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+      }
+      const pGeo = new THREE.BufferGeometry();
+      pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      pGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const points = new THREE.Points(pGeo, new THREE.PointsMaterial({
+        size: 0.018, vertexColors: true, transparent: true, opacity: 0.85,
+        blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+      }));
+      group.add(points);
+
+      // wireframe icosahedron core
+      const core = new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(1.18, 1)),
+        new THREE.LineBasicMaterial({ color: '#a78bfa', transparent: true, opacity: 0.55 })
+      );
+      group.add(core);
+
+      // inner glow sprite
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = glowCanvas.height = 128;
+      const gctx = glowCanvas.getContext('2d');
+      const grad = gctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+      grad.addColorStop(0, 'rgba(124,108,255,0.55)');
+      grad.addColorStop(1, 'rgba(124,108,255,0)');
+      gctx.fillStyle = grad;
+      gctx.fillRect(0, 0, 128, 128);
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(glowCanvas), transparent: true, opacity: 0.8, depthWrite: false,
+      }));
+      glow.scale.set(3.4, 3.4, 1);
+      group.add(glow);
+
+      function resize() {
+        const w = container.clientWidth || 600;
+        const h = container.clientHeight || 480;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      // pointer-reactive rotation (lerped in the render loop)
+      let tx = 0, ty = 0, rx = 0, ry = 0;
+      window.addEventListener('pointermove', (e) => {
+        tx = (e.clientX / window.innerWidth) * 2 - 1;
+        ty = (e.clientY / window.innerHeight) * 2 - 1;
+      }, { passive: true });
+
+      let paused = false;
+      document.addEventListener('visibilitychange', () => { paused = document.hidden; });
+
+      const clock = new THREE.Clock();
+      renderer.setAnimationLoop(() => {
+        if (paused) return;
+        const t = clock.getElapsedTime();
+        rx += (ty * 0.5 - rx) * 0.05;
+        ry += (tx * 0.8 - ry) * 0.05;
+        group.rotation.y = t * 0.12 + ry;
+        group.rotation.x = Math.sin(t * 0.16) * 0.08 + rx;
+        points.rotation.y = -t * 0.05;
+        core.rotation.y = t * 0.3;
+        core.rotation.x = t * 0.18;
+        const pulse = 1 + Math.sin(t * 1.6) * 0.06;
+        glow.scale.set(3.4 * pulse, 3.4 * pulse, 1);
+        renderer.render(scene, camera);
+      });
+    } catch (err) {
+      // WebGL unavailable → the 2D canvas starfield remains the ambient layer.
+      if (container) container.remove();
+    }
+  </script>
+</body>
+</html>

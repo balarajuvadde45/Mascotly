@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" }
+  ],
+  "headers": [
+    {
+      "source": "/widget/(.*)",
+      "headers": [
+        { "key": "cache-control", "value": "public, max-age=300" }
+      ]
+    },
+    {
+      "source": "/api/v1/widget-config/(.*)",
+      "headers": [
+        { "key": "cache-control", "value": "public, max-age=30" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "port": 4242,
+  "dataDir": "./data",
+  "llm": {
+    "provider": "openai-compatible",
+    "baseUrl": "https://api.openai.com/v1",
+    "model": "gpt-4o-mini",
+    "apiKey": "sk-..."
+  },
+  "embeddings": {
+    "provider": "none",
+    "model": "text-embedding-3-small"
+  },
+  "rea": {
+    "command": "auto"
+  },
+  "maxChunksPerApp": 20000
+}
