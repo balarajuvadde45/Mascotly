@@ -25,7 +25,7 @@ workflow (the HTTP server is only needed to serve the widget/dashboard).
 ## One-command setup
 
 ```bash
-git clone https://github.com/morluto/mascot && cd mascot
+git clone https://github.com/morluto/mascotly && cd mascotly
 npm install
 
 # register with your agent (creates a .mascot-backup of its config first)

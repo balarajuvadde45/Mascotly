@@ -103,6 +103,7 @@ export function buildChatRouter(store) {
     let done = null;
     for await (const ev of chatStream(store, app, {
       message,
+      sessionId: b.sessionId ? String(b.sessionId).slice(0, 80) : null,
       history: Array.isArray(b.history) ? b.history.slice(-16) : [],
       page: b.page,
     })) {
@@ -151,6 +152,7 @@ export function buildChatRouter(store) {
       let done = null;
       for await (const ev of chatStream(store, app, {
         message,
+        sessionId: b.sessionId ? String(b.sessionId).slice(0, 80) : null,
         history: Array.isArray(b.history) ? b.history.slice(-16) : [],
         page: b.page,
       })) {

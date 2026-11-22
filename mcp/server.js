@@ -22,7 +22,9 @@ import { runReaIngest } from '../src/rea/service.js';
 import { reaStatus } from '../src/rea/adapter.js';
 import { chat } from '../src/brain/agent.js';
 import { createJob } from '../src/jobs.js';
+import { forgeBot } from '../src/forge.js';
 import { truncate } from '../src/util.js';
+import { getLlm } from '../src/providers/llm.js';
 
 const VERSION = '0.1.0';
 
@@ -358,6 +360,25 @@ const TOOLS = [
       store.saveApp(app);
       if (args.kind === 'skill') invalidateRetriever(app.id);
       return { removed: args.id, kind: args.kind };
+    },
+  },
+  {
+    name: 'mascot_forge',
+    description: 'THE headline capability: give Mascotly a repository (owner/name; private repos need a githubToken) and it analyzes the code/docs, designs a mascot, installs skills, runs the analyzer, and returns the embed snippet + deploy guidance. Optionally deploys a bot starter page to Vercel with vercelToken.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repo: { type: 'string', description: 'owner/name or a GitHub URL' },
+        intent: { type: 'string', description: 'what the owner wants the bot for (free text)' },
+        githubToken: { type: 'string', description: 'GitHub token for private repos' },
+        serverUrl: { type: 'string', description: 'public Mascotly server origin for the snippet' },
+        vercelToken: { type: 'string', description: 'optional — deploys a bot starter page to Vercel' },
+      },
+      required: ['repo'],
+    },
+    async run(args) {
+      const result = await forgeBot({ store, llm: getLlm({}), repo: args.repo, intent: args.intent, githubToken: args.githubToken, serverUrl: args.serverUrl, vercelToken: args.vercelToken });
+      return result;
     },
   },
   {

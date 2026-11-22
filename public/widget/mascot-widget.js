@@ -305,7 +305,7 @@
         + '    <textarea class="mz-input" rows="1" placeholder="Ask anything…"></textarea>'
         + '    <button class="mz-send" aria-label="Send message">➤</button>'
         + '  </div>'
-        + '  <div class="mz-foot">powered by <a href="https://github.com/morluto/mascot" target="_blank" rel="noopener noreferrer">Mascotly</a></div>'
+        + '  <div class="mz-foot">powered by <a href="https://github.com/morluto/mascotly" target="_blank" rel="noopener noreferrer">Mascotly</a></div>'
         + '</div>';
       shadow.appendChild(wrap);
 

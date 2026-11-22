@@ -234,9 +234,9 @@ export async function fetchSitemapUrls(sitemapUrl, maxUrls = 25) {
 
 // ---------- GitHub ----------
 
-const GH_API = 'https://api.github.com';
+const GH_API = () => process.env.MASCOT_GITHUB_API || 'https://api.github.com'; // evaluated per-call (tests/self-host override)
 
-export async function fetchGithubRepo(repo, { maxFiles = 20, branch } = {}) {
+export async function fetchGithubRepo(repo, { maxFiles = 20, branch, token } = {}) {
   const clean = String(repo || '').trim().replace(/^\/+|\/+$/g, '').replace(/\.git$/, '');
   const m = clean.match(/^([\w.-]+)\/([\w.-]+)$/);
   if (!m) throw new Error('Repository must look like owner/name');
@@ -246,9 +246,10 @@ export async function fetchGithubRepo(repo, { maxFiles = 20, branch } = {}) {
     'user-agent': config.crawl.userAgent,
     accept: 'application/vnd.github+json',
   };
-  if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const ghToken = token || process.env.GITHUB_TOKEN;
+  if (ghToken) headers.authorization = `Bearer ${ghToken}`;
 
-  const metaRes = await fetch(`${GH_API}/repos/${owner}/${name}`, { headers });
+  const metaRes = await fetch(`${GH_API()}/repos/${owner}/${name}`, { headers });
   if (!metaRes.ok) throw new Error(`GitHub repo lookup failed (${metaRes.status}). ${metaRes.status === 404 ? 'Check owner/name and that the repo is public.' : metaRes.status === 403 ? 'GitHub API rate limit may be hit — set GITHUB_TOKEN.' : ''}`);
   const meta = await metaRes.json();
   const ref = branch || meta.default_branch || 'main';
@@ -257,7 +258,7 @@ export async function fetchGithubRepo(repo, { maxFiles = 20, branch } = {}) {
 
   // README
   try {
-    const readmeRes = await fetch(`${GH_API}/repos/${owner}/${name}/readme`, {
+    const readmeRes = await fetch(`${GH_API()}/repos/${owner}/${name}/readme`, {
       headers: { ...headers, accept: 'application/vnd.github.raw' },
     });
     if (readmeRes.ok) {
@@ -267,7 +268,7 @@ export async function fetchGithubRepo(repo, { maxFiles = 20, branch } = {}) {
 
   // Docs tree (.md/.mdx under docs/, or repo-root *.md)
   try {
-    const treeRes = await fetch(`${GH_API}/repos/${owner}/${name}/git/trees/${encodeURIComponent(ref)}?recursive=1`, { headers });
+    const treeRes = await fetch(`${GH_API()}/repos/${owner}/${name}/git/trees/${encodeURIComponent(ref)}?recursive=1`, { headers });
     if (treeRes.ok) {
       const tree = await treeRes.json();
       const candidates = (tree.tree || [])

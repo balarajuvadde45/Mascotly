@@ -6,6 +6,7 @@
 //   - LLM map-reduce (when a provider is configured)
 //   - Extractive heuristics (always available; also the fallback on LLM failure)
 import { getLlm } from '../providers/llm.js';
+import { ANALYZE_BATCH, ANALYZE_REDUCE, fill, GUARDRAILS } from '../prompts.js';
 import { truncate, stripCodeFence, extractJsonObject, nowIso, cleanText } from '../util.js';
 import { jobStep, finishJob, failJob, recordJob } from '../jobs.js';
 
@@ -105,20 +106,11 @@ async function analyzeWithLlm(store, app, chunks, llm, job) {
       return `(#${idx + 1}, source: ${truncate(src, 80)})\n${truncate(c.text, 2200)}`;
     }).join('\n\n---\n\n');
     try {
+      // Centralized prompts (src/prompts.js): system carries the role + guardrails,
+      // user carries the per-batch material.
       const parsed = await llmJsonCall(llm, [
-        { role: 'system', content: 'You are a precise product analyst. You extract facts strictly from provided material. Reply with ONLY a JSON object.' },
-        {
-          role: 'user',
-          content: [
-            'The following is indexed material (docs/reviews) from a software application. Extract structured facts about the application.',
-            'Return ONLY this JSON shape:',
-            '{"purpose": "one sentence", "summary": "2-3 sentences", "features": ["..."], "audience": "who it is for", "limitations": ["..."], "faqs": [{"q": "...", "a": "..."}], "tone": "suggested mascot tone"}',
-            '',
-            'Rules: every item must be traceable to the material. No invented facts. Max 10 features, 5 limitations, 4 faqs. If material is thin, return fewer items.',
-            '',
-            texts,
-          ].join('\n'),
-        },
+        { role: 'system', content: fill(ANALYZE_BATCH, { guardrails: GUARDRAILS, texts: '' }).split('Material:')[0].trim() },
+        { role: 'user', content: fill(ANALYZE_BATCH, { guardrails: '', texts }) },
       ]);
       partials.push(parsed);
     } catch (err) {
@@ -132,16 +124,10 @@ async function analyzeWithLlm(store, app, chunks, llm, job) {
   jobStep(job, 'synthesizing profile', '', 80);
   const merged = profileFromLlmBatches(partials);
   const reduced = await llmJsonCall(llm, [
-    { role: 'system', content: 'You are a product analyst finalizing an app profile for an AI mascot. Reply with ONLY a JSON object.' },
+    { role: 'system', content: fill(ANALYZE_REDUCE, { guardrails: GUARDRAILS, notes: '' }).split('Here are analyst notes')[0].trim() },
     {
       role: 'user',
-      content: [
-        'Here are analyst notes extracted from the application\'s documentation in batches:',
-        JSON.stringify(partials, null, 1).slice(0, 14_000),
-        '',
-        'Merge them into one final profile. Return ONLY this JSON shape:',
-        '{"summary": "2-3 sentences about what the app is", "features": ["up to 12"], "audience": "...", "limitations": ["up to 6"], "faqs": [{"q":"...","a":"..."}], "tone": "one sentence", "suggestions": ["4 good starter questions a new user would ask"]}',
-      ].join('\n'),
+      content: fill(ANALYZE_REDUCE, { guardrails: '', notes: JSON.stringify(partials, null, 1).slice(0, 14_000) }),
     },
   ], 1600);
 

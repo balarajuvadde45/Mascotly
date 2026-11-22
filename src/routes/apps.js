@@ -12,6 +12,8 @@ import { analyzeApp } from '../analysis/analyzer.js';
 import { reaStatus } from '../rea/adapter.js';
 import { runReaIngest } from '../rea/service.js';
 import { fireHooks, HOOK_EVENTS } from '../hooks.js';
+import { forgeBotAsJob } from '../forge.js';
+import { getLlm } from '../providers/llm.js';
 import { truncate, slugify, secretKey, newId } from '../util.js';
 
 const VERSION = '0.1.0';
@@ -579,6 +581,44 @@ export function buildApiRouter(store) {
     store.saveApp(app);
     invalidateRetriever(app.id);
     res.json({ ok: true, imported });
+  }));
+
+  // ---------- Forge (repo → bot) ----------
+  // Global forge-job poll (no appId yet — the job creates one).
+  api.get('/forge/jobs/:jobId', auth.requireAdmin, asyncHandler(async (req, res) => {
+    const { getJob } = await import('../jobs.js');
+    const job = getJob('forge', req.params.jobId);
+    if (!job) throw new HttpError(404, 'Job not found (may have restarted)', 'not_found');
+    res.json({ job });
+  }));
+
+  api.post('/forge', auth.requireAdmin, asyncHandler(async (req, res) => {
+    const b = req.body || {};
+    if (!b.repo || typeof b.repo !== 'string') throw new HttpError(400, 'repo (owner/name or GitHub URL) is required');
+    if (config.serverless) {
+      // Inline on serverless: bounded by the function duration.
+      try {
+        const llm = getLlm({});
+        const result = await forgeBotAsJob(store, llm, { repo: b.repo, intent: b.intent, githubToken: b.githubToken, serverUrl: b.serverUrl, vercelToken: b.vercelToken }).promise;
+        res.json({ ok: true, inline: true, result });
+      } catch (err) {
+        res.status(err.code === 'no_knowledge' ? 400 : 500).json({ error: 'forge_failed', message: err.message });
+      }
+      return;
+    }
+    const { job, promise } = forgeBotAsJob(store, getLlm({}), {
+      repo: b.repo,
+      intent: b.intent,
+      githubToken: b.githubToken,
+      serverUrl: b.serverUrl,
+      vercelToken: b.vercelToken,
+    });
+    // Record the job against the app once it exists (the job creates it).
+    promise.then((result) => {
+      const app = store.getApp(result.appId);
+      if (app) recordJob(store, app, job);
+    }).catch(() => {});
+    res.status(202).json({ jobId: job.id, status: job.status });
   }));
 
   // ---------- REA ----------

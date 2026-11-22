@@ -9,11 +9,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./app.css" />
+  <link rel="stylesheet" href="./app.css?v=0.1.1" />
 </head>
 <body>
   <div id="app" class="app"></div>
   <div id="toast" class="toast" role="status"></div>
-  <script src="./app.js"></script>
+  <script>
+    window.__bootErrs = [];
+    window.addEventListener('error', function (e) {
+      window.__bootErrs.push(e.message + ' @ ' + (e.filename || '').split('/').pop() + ':' + (e.lineno || 0));
+      var el = document.getElementById('app');
+      if (el && !el.innerHTML) el.innerHTML = '<div style="padding:30px;color:#e74c3c;font-family:monospace">boot error: ' + e.message + '</div>';
+    });
+  </script>
+  <script src="./app.js?v=0.1.5"></script>
 </body>
 </html>

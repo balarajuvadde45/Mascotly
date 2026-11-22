@@ -89,7 +89,7 @@ export const config = {
 
   crawl: {
     userAgent: pick(env.MASCOT_CRAWLER_UA, file.crawl?.userAgent)
-      || 'MascotlyBot/0.1 (+https://github.com/morluto/mascot; docs indexer)',
+      || 'MascotlyBot/0.1 (+https://github.com/morluto/mascotly; docs indexer)',
     timeoutMs: intVal(pick(env.MASCOT_CRAWL_TIMEOUT, file.crawl?.timeoutMs), 20000),
     maxPages: intVal(pick(env.MASCOT_CRAWL_MAX_PAGES, file.crawl?.maxPages), 15),
     maxCharsPerPage: intVal(pick(env.MASCOT_CRAWL_MAX_CHARS, file.crawl?.maxCharsPerPage), 120_000),

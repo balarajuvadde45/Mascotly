@@ -343,8 +343,9 @@
       <nav class="links">
         <a href="#how">How it works</a>
         <a href="#agents">Agents</a>
+        <a href="#forge">Forge</a>
         <a href="#deploy">Deploy</a>
-        <a href="https://github.com/morluto/mascot" target="_blank" rel="noopener">GitHub ↗</a>
+        <a href="https://github.com/morluto/mascotly" target="_blank" rel="noopener">GitHub ↗</a>
         <a class="cta" href="/dashboard/">Dashboard</a>
       </nav>
     </div>
@@ -398,7 +399,7 @@
           <div class="terminal">
             <div class="bar"><i></i><i></i><i></i></div>
             <pre><span class="c"># self-host in under a minute</span>
-git clone https://github.com/morluto/mascot && cd mascot
+git clone https://github.com/morluto/mascotly && cd mascot
 npm install && npm start
 <span class="c"># → dashboard on http://localhost:4242/dashboard</span></pre>
           </div>
@@ -466,7 +467,7 @@ npm install && npm start
             <button data-agent="manual">Manual MCP</button>
           </div>
           <div class="agent-panel">
-            <pre id="agent-cmd">git clone https://github.com/morluto/mascot && cd mascot
+            <pre id="agent-cmd">git clone https://github.com/morluto/mascotly && cd mascot
 npm install
 
 # register the Mascotly MCP server with Claude Code (creates a backup first)
@@ -498,6 +499,23 @@ node bin/mascot.js setup --client claude_code --install-skill
     window.location.href = args.url;
   });
 &lt;/script&gt;</pre>
+      </div>
+    </section>
+
+    <!-- ───────────────── forge ───────────────── -->
+    <section id="forge">
+      <div class="wrap">
+        <h2 class="section reveal">Forge: give us a repo, get a mascot</h2>
+        <p class="section-sub reveal">Point Mascotly at any repository — public, or yours with a GitHub token. It ingests the code and docs, designs the mascot's identity and skills, and hands you the embed snippet or a deployed URL.</p>
+        <div class="grid3">
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🧬</span><h3>1 · Analyze</h3><p>The forge ingests your repository (README, docs trees, guides) and asks a reasoning model what this app is, who uses it, and what they actually ask.</p></div>
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🎨</span><h3>2 · Design</h3><p>It designs the mascot: name, voice, emoji, greeting, starter questions — and installs SKILL.md skills for reusable behaviors.</p></div>
+          <div class="card3d tilt reveal"><span class="glare"></span><span class="ico">🚀</span><h3>3 · Ship</h3><p>You get the embed snippet for your app, or a one-shot Vercel deploy of a bot starter page. AWS paths (ECS/App Runner + S3) are included.</p></div>
+        </div>
+        <div class="cta-row" style="margin-top:26px">
+          <a class="btn3d" href="/dashboard/#/forge">🔥 Open the Forge →</a>
+          <a class="btn3d ghost" href="https://github.com/morluto/mascotlyly" target="_blank" rel="noopener">Read the Forge docs</a>
+        </div>
       </div>
     </section>
 
@@ -550,7 +568,7 @@ node bin/mascot.js setup --client claude_code --install-skill
       <div class="wrap">
         <div class="cols">
           <div><b>Product</b><a href="/dashboard/">Dashboard</a><a href="#how">How it works</a><a href="#agents">Agent setup</a></div>
-          <div><b>Resources</b><a href="https://github.com/morluto/mascot" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/morluto/mascot/tree/main/docs" target="_blank" rel="noopener">Documentation</a><a href="https://github.com/morluto/mascot/issues" target="_blank" rel="noopener">Issues</a></div>
+          <div><b>Resources</b><a href="https://github.com/morluto/mascotly" target="_blank" rel="noopener">GitHub</a><a href="https://github.com/morluto/mascotly/tree/main/docs" target="_blank" rel="noopener">Documentation</a><a href="https://github.com/morluto/mascotly/issues" target="_blank" rel="noopener">Issues</a></div>
           <div><b>Related</b><a href="https://github.com/morluto/rea" target="_blank" rel="noopener">REA — morluto/rea</a></div>
         </div>
         <div>Mascotly — MIT licensed. Built for teams who want their assistant to actually know their product.</div>
@@ -670,11 +688,11 @@ node bin/mascot.js setup --client claude_code --install-skill
 
       /* ── agent install tabs (content is static and XSS-safe) ── */
       var cmds = {
-        claude: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register the Mascotly MCP server with Claude Code (creates a backup first)', 'node bin/mascot.js setup --client claude_code --install-skill', '', '# then just ask your agent:', '#   "Add a mascot to my app at ~/projects/myapp" ← it does the rest'].join('\n'),
-        codex: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register with Codex CLI (appends to ~/.codex/config.toml, backup first)', 'node bin/mascot.js setup --client codex --install-skill'].join('\n'),
-        cursor: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register with Cursor (writes ~/.cursor/mcp.json, backup first)', 'node bin/mascot.js setup --client cursor --install-skill'].join('\n'),
-        windsurf: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register with Windsurf (writes ~/.codeium/windsurf/mcp_config.json)', 'node bin/mascot.js setup --client windsurf --install-skill'].join('\n'),
-        gemini: ['git clone https://github.com/morluto/mascot && cd mascot', 'npm install', '', '# register with Gemini CLI (writes ~/.gemini/settings.json)', 'node bin/mascot.js setup --client gemini_cli --install-skill'].join('\n'),
+        claude: ['git clone https://github.com/morluto/mascotly && cd mascot', 'npm install', '', '# register the Mascotly MCP server with Claude Code (creates a backup first)', 'node bin/mascot.js setup --client claude_code --install-skill', '', '# then just ask your agent:', '#   "Add a mascot to my app at ~/projects/myapp" ← it does the rest'].join('\n'),
+        codex: ['git clone https://github.com/morluto/mascotly && cd mascot', 'npm install', '', '# register with Codex CLI (appends to ~/.codex/config.toml, backup first)', 'node bin/mascot.js setup --client codex --install-skill'].join('\n'),
+        cursor: ['git clone https://github.com/morluto/mascotly && cd mascot', 'npm install', '', '# register with Cursor (writes ~/.cursor/mcp.json, backup first)', 'node bin/mascot.js setup --client cursor --install-skill'].join('\n'),
+        windsurf: ['git clone https://github.com/morluto/mascotly && cd mascot', 'npm install', '', '# register with Windsurf (writes ~/.codeium/windsurf/mcp_config.json)', 'node bin/mascot.js setup --client windsurf --install-skill'].join('\n'),
+        gemini: ['git clone https://github.com/morluto/mascotly && cd mascot', 'npm install', '', '# register with Gemini CLI (writes ~/.gemini/settings.json)', 'node bin/mascot.js setup --client gemini_cli --install-skill'].join('\n'),
         manual: ['# Any MCP-capable client (stdio transport):', '{', '  "mcpServers": {', '    "mascot": {', '      "command": "node",', '      "args": ["/absolute/path/to/mascot/mcp/server.js"]', '    }', '  }', '}', '', '# Tools: mascot_create_app, mascot_add_source, mascot_analyze,', '# mascot_search, mascot_chat, mascot_embed_snippet, mascot_rea …'].join('\n')
       };
       var tabs = document.getElementById('agent-tabs');

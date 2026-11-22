@@ -19,7 +19,8 @@
 //   UPSTASH_REDIS_REST_URL  /  KV_REST_API_URL      (Vercel KV injects the latter)
 //   UPSTASH_REDIS_REST_TOKEN / KV_REST_API_TOKEN
 //   MASCOT_KV_PREFIX (default "mascot:")
-import { newId, nowIso, slugify, secretKey } from './util.js';
+import { newId, nowIso, secretKey } from './util.js';
+import { buildAppRecord } from './app-record.js';
 
 function pickEnv(...names) {
   for (const n of names) {
@@ -274,67 +275,12 @@ export class UpstashStore {
     return this._blobs.get(appId) || null;
   }
 
-  createApp({ name, description = '', mascot = {}, settings = {} }) {
-    const id = newId('app');
-    const slug = slugify(name);
-    const record = {
-      id,
-      slug,
-      name,
-      description,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
-      publicKey: secretKey(16),
-      secretKey: secretKey(24),
-      mascot: {
-        name: mascot.name || 'Mottie',
-        emoji: mascot.emoji || '🤖',
-        color: mascot.color || '#6c5ce7',
-        greeting: mascot.greeting || `Hi! I'm ${mascot.name || 'Mottie'} — ask me anything about this app.`,
-        tagline: mascot.tagline || 'AI assistant',
-        personality: mascot.personality || 'friendly, concise and helpful. You keep answers short and use markdown lists when helpful.',
-        welcome: mascot.welcome ?? true,
-        suggestions: Array.isArray(mascot.suggestions) ? mascot.suggestions.slice(0, 6) : [],
-        actions: Array.isArray(mascot.actions) ? mascot.actions.slice(0, 12) : [],
-        avatarUrl: mascot.avatarUrl || '',
-        position: mascot.position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
-        telemetryOff: !!mascot.telemetryOff,
-      },
-      settings: {
-        rateLimitPerMin: Number.isFinite(settings.rateLimitPerMin) ? settings.rateLimitPerMin : 20,
-        allowedOrigins: Array.isArray(settings.allowedOrigins) ? settings.allowedOrigins : [],
-        escalationKeywords: Array.isArray(settings.escalationKeywords) && settings.escalationKeywords.length
-          ? settings.escalationKeywords
-          : ['human', 'real person', 'support ticket', 'complain', 'refund', 'cancel account'],
-        autoAnalyze: settings.autoAnalyze !== false,
-        systemPromptExtra: String(settings.systemPromptExtra || ''),
-        ...(settings.model && typeof settings.model === 'object' ? {
-          model: {
-            provider: String(settings.model.provider || 'auto').slice(0, 40),
-            baseUrl: String(settings.model.baseUrl || '').slice(0, 300),
-            model: String(settings.model.model || '').slice(0, 120),
-            apiKey: String(settings.model.apiKey || '').slice(0, 300),
-          },
-        } : {}),
-        ...(settings.embeddings && typeof settings.embeddings === 'object' ? {
-          embeddings: {
-            provider: String(settings.embeddings.provider || 'none').slice(0, 40),
-            baseUrl: String(settings.embeddings.baseUrl || '').slice(0, 300),
-            model: String(settings.embeddings.model || '').slice(0, 120),
-            apiKey: String(settings.embeddings.apiKey || '').slice(0, 300),
-          },
-        } : {}),
-      },
-      skills: [],   // SKILL.md-compatible capability packs (agentskills.io format)
-      tools: [],    // HTTP tool plugins callable by the mascot mid-chat
-      hooks: [],    // signed lifecycle webhooks (message/escalation/feedback)
-      stats: { messages: 0, sessions: 0, chunks: 0, ingestedChars: 0, lastChatAt: null, lastAnalyzedAt: null },
-      jobs: [],
-    };
-    this._blobs.set(id, { id, app: record, sources: [], chunks: [], profile: null, sessions: {} });
-    this._registry.apps.push({ id, slug, name, createdAt: record.createdAt, updatedAt: record.updatedAt });
+  createApp(opts) {
+    const record = buildAppRecord(opts, { id: newId('app') });
+    this._blobs.set(record.id, { id: record.id, app: record, sources: [], chunks: [], profile: null, sessions: {} });
+    this._registry.apps.push({ id: record.id, slug: record.slug, name: record.name, createdAt: record.createdAt, updatedAt: record.updatedAt });
     this._dirtyRegistry = true;
-    this._markBlob(id);
+    this._markBlob(record.id);
     return record;
   }
 

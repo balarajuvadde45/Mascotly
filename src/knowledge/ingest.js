@@ -316,9 +316,9 @@ export async function ingestSitemap(store, app, { url, maxUrls, source, deadline
   return { sourceId: src.id, ...commit };
 }
 
-export async function ingestGithub(store, app, { repo, branch, source } = {}, onProgress = () => {}) {
+export async function ingestGithub(store, app, { repo, branch, source, token } = {}, onProgress = () => {}) {
   onProgress('looking up repository…', 5);
-  const { meta, files } = await fetchGithubRepo(repo, { branch });
+  const { meta, files } = await fetchGithubRepo(repo, { branch, token });
   if (!files.length) throw new Error('No readable markdown files found in the repo (is it public?)');
   const src = source || addSourceRecord(store, app, {
     type: 'github',

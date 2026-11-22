@@ -150,9 +150,10 @@
       + '  <aside class="sidebar">'
       + '    <div class="logo"><span class="m">🤖</span> Mascotly</div>'
       + '    <a class="nav ' + (r.page === 'apps' ? 'active' : '') + '" href="#/apps">📋 All mascots</a>'
+      + '    <a class="nav ' + (r.page === 'forge' ? 'active' : '') + '" href="#/forge">🔥 Forge from repo</a>'
       + '    <a class="nav ' + (r.page === 'create' ? 'active' : '') + '" href="#/create">➕ New mascot</a>'
       + '    <div class="spacer"></div>'
-      + '    <div class="foot"><a href="/" target="_blank">landing ↗</a> · <a href="https://github.com/morluto/mascot" target="_blank" rel="noopener">github ↗</a><br/>v0.1.0</div>'
+      + '    <div class="foot"><a href="/" target="_blank">landing ↗</a> · <a href="https://github.com/morluto/mascotly" target="_blank" rel="noopener">github ↗</a><br/>v0.1.0</div>'
       + '  </aside>'
       + '  <main class="main">' + content + '</main>'
       + '</div>';
@@ -192,6 +193,140 @@
       + '<p>2. Embed it anywhere:</p>'
       + '<div class="snippet">&lt;script src="' + esc(location.origin) + '/widget/mascot-widget.js"&gt;&lt;/script&gt;\n&lt;script&gt;\n  window.Mascotly.init({ server: \'' + esc(location.origin) + '\', appId: \'app_...\', publicKey: \'pk_...\' });\n&lt;/script&gt;</div>'
       + '</div>');
+  }
+
+  // ------------------------------------------------------------ forge
+  var forgeState = { result: null, busy: false };
+  try { forgeState.result = JSON.parse(sessionStorage.getItem('mascotly_forge_result') || 'null'); } catch (e) { forgeState.result = null; }
+  function saveForgeResult(r) {
+    forgeState.result = r;
+    try { sessionStorage.setItem('mascotly_forge_result', JSON.stringify(r)); } catch (e) { /* noop */ }
+  }
+
+  function renderForge() {
+    var r = forgeState.result;
+    shell(''
+      + '<div class="topbar"><h1>🔥 Forge — repo → mascot</h1></div>'
+      + '<div class="card"><p class="muted" style="margin:0 0 6px">Give Mascotly any repository (public, or private with a GitHub token). It ingests the code and docs, analyzes what the app is and what its users ask, designs a mascot with skills, and hands you the embed snippet — plus an optional one-shot Vercel deploy of a bot starter page.</p>'
+      + '<p class="muted" style="margin:0">Requires an LLM provider — the Forge needs a real brain to design the bot.</p></div>'
+      + '<div class="card">'
+      + '  <div class="grid cols-2">'
+      + '    <label class="field"><span>Repository (owner/name or GitHub URL) *</span><input type="text" id="f-repo" placeholder="docsifyjs/docsify"/></label>'
+      + '    <label class="field"><span>What should the bot do? (intent, free text)</span><input type="text" id="f-intent" placeholder="A docs assistant that helps new users get started"/></label>'
+      + '    <label class="field"><span>GitHub token (optional — private repos)</span><input type="password" id="f-gh" placeholder="ghp_…"/></label>'
+      + '    <label class="field"><span>Vercel token (optional — deploy a starter page)</span><input type="password" id="f-vc" placeholder="vercel token"/></label>'
+      + '  </div>'
+      + '  <button id="f-go">🔥 Forge the mascot</button>'
+      + '  <div id="f-progress" style="margin-top:14px"></div>'
+      + '</div>'
+      + (r ? renderForgeResult(r) : '')
+    );
+    bindForgeEvents();
+  }
+
+  function renderForgeResult(r) {
+    return ''
+      + '<h2>🔥 Forged: ' + esc(r.appName) + '</h2>'
+      + '<div class="card">'
+      + '  <h3>What the repo is</h3><p class="muted">' + esc(r.analysis.whatItIs || '') + '</p>'
+      + '  <h3>Users</h3><p class="muted">' + esc(r.analysis.users || '') + '</p>'
+      + '  <h3>Top questions the bot should answer</h3><ul>' + (r.analysis.topQuestions || []).map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>'
+      + '  <h3>The mascot</h3><div class="pill-row">'
+      + '    <span class="pill">' + esc((r.spec.mascot && r.spec.mascot.emoji) || '🤖') + ' ' + esc((r.spec.mascot && r.spec.mascot.name) || '') + '</span>'
+      + '    <span class="pill">' + esc((r.spec.mascot && r.spec.mascot.tagline) || '') + '</span>'
+      + '    <span class="pill">' + esc(r.intentLabel || 'forge') + '</span>'
+      + '  </div>'
+      + '  <h3>Skills installed</h3><ul>' + (r.spec.skills || []).map(function (sn) { return '<li class="mono">' + esc(sn) + '</li>'; }).join('') + '</ul>'
+      + '</div>'
+      + '<div class="card"><h3>Embed snippet</h3><div class="snippet" id="forge-snippet">' + esc(r.snippet) + '<button class="copy secondary small" data-target="forge-snippet">copy</button></div>'
+      + '<a class="btn secondary small" style="margin-top:10px" href="#/app/' + esc(r.appId) + '/overview">Open the forged app →</a> '
+      + '<button class="ghost small" id="forge-clear">Start a new forge</button></div>'
+      + '<div class="card"><h3>Deployment</h3>'
+      + (r.deploy.vercel && r.deploy.vercel.url
+        ? '<p>✅ Bot starter deployed: <a href="' + esc(r.deploy.vercel.url) + '" target="_blank" rel="noopener">' + esc(r.deploy.vercel.url) + '</a></p>'
+        : '<p class="muted">' + ((r.deploy.vercel && r.deploy.vercel.steps) ? r.deploy.vercel.steps.map(esc).join('<br/>') : '') + '</p>')
+      + '<p class="muted" style="margin-top:8px"><b>AWS:</b> ' + esc((r.deploy.aws && r.deploy.aws.steps || []).join(' · ')) + '</p>'
+      + '</div>';
+  }
+
+  function bindForgeEvents() {
+    var go = document.getElementById('f-go');
+    if (!go) return;
+    go.onclick = async function () {
+      if (forgeState.busy) return;
+      var repo = document.getElementById('f-repo').value.trim();
+      if (!repo) return toast('Repository required');
+      forgeState.busy = true;
+      go.disabled = true;
+      var progress = document.getElementById('f-progress');
+      progress.innerHTML = '<div class="progress"><div style="width:4%"></div></div><div class="muted" style="margin-top:6px">Forging… ingesting the repo, analyzing, designing the mascot.</div>';
+      try {
+        var res = await api('POST', '/forge', {
+          repo: repo,
+          intent: document.getElementById('f-intent').value.trim(),
+          githubToken: document.getElementById('f-gh').value.trim() || undefined,
+          vercelToken: document.getElementById('f-vc').value.trim() || undefined,
+        });
+        if (res.inline) {
+          saveForgeResult(res.result);
+          forgeState.busy = false;
+          renderForge();
+          return;
+        }
+        var iv = setInterval(async function () {
+          try {
+            var jr = await api('GET', '/forge/jobs/' + res.jobId);
+            var job = jr.job;
+            var bar = progress.querySelector('.progress > div');
+            if (bar) bar.style.width = Math.max(4, job.progress || 4) + '%';
+            progress.querySelector('.muted').textContent = job.steps.length ? job.steps[job.steps.length - 1].name : 'working…';
+            if (job.status === 'done' || job.status === 'failed') {
+              clearInterval(iv);
+              forgeState.busy = false;
+              if (job.status === 'failed') {
+                progress.innerHTML = '<span class="badge failed">failed</span> <span class="muted">' + esc(job.error || '') + '</span>';
+                go.disabled = false;
+                return;
+              }
+              // Reconstruct the result from the created app (job.result carries app.id).
+              var appId = job.result && job.result.appId;
+              if (!appId) { progress.innerHTML = '<span class="badge failed">forge produced no app</span>'; return; }
+              var full = await api('GET', '/apps/' + appId);
+              var profile = (await api('GET', '/apps/' + appId + '/profile')).profile || {};
+              var manifest = (await api('GET', '/apps/' + appId + '/plugin-manifest')).manifest || {};
+              var server = location.origin;
+              saveForgeResult({
+                appId: appId,
+                appName: full.app.name,
+                publicKey: full.app.publicKey,
+                analysis: { whatItIs: profile.summary || '', users: profile.audience || '', topQuestions: (profile.suggestions || []).concat(full.app.mascot.suggestions || []) },
+                spec: { mascot: full.app.mascot, skills: (manifest.skills || []).map(function (sk) { return sk.name; }) },
+                intentLabel: (job.result && job.result.intentLabel) || 'forge',
+                snippet: '<script src="' + server + '/widget/mascot-widget.js"></script>\n<script>\n  window.Mascotly.init({ server: \'' + server + '\', appId: \'' + appId + '\', publicKey: \'' + full.app.publicKey + '\' });\n</script>',
+                deploy: (job.result && job.result.deploy) || {},
+              });
+              renderForge();
+            }
+          } catch (e) { clearInterval(iv); window.__pollErr = String(e && e.message || e); }
+        }, 1500);
+      } catch (e) {
+        toast(e.message);
+        forgeState.busy = false;
+        go.disabled = false;
+        progress.innerHTML = '';
+      }
+    };
+    var clearBtn = document.getElementById('forge-clear');
+    if (clearBtn) clearBtn.onclick = function () {
+      try { sessionStorage.removeItem('mascotly_forge_result'); } catch (e) { /* noop */ }
+      forgeState.result = null;
+      renderForge();
+    };
+    var copy = document.querySelector('#forge-snippet .copy');
+    if (copy) copy.onclick = function () {
+      var t = document.getElementById('forge-snippet');
+      copyText(t.textContent.replace(/copy$/, ''));
+    };
   }
 
   // ------------------------------------------------------------ create
@@ -560,7 +695,7 @@
       form.innerHTML = '<label class="field"><span>Sitemap URL</span><input type="url" id="af-url" placeholder="https://app.com/sitemap.xml"/></label>'
         + '<button id="af-go">Fetch sitemap &amp; index</button>';
     } else if (type === 'github') {
-      form.innerHTML = '<label class="field"><span>Repository (owner/name — public)</span><input type="text" id="af-repo" placeholder="morluto/mascot"/></label>'
+      form.innerHTML = '<label class="field"><span>Repository (owner/name — public)</span><input type="text" id="af-repo" placeholder="morluto/mascotly"/></label>'
         + '<label class="field"><span>Branch (optional)</span><input type="text" id="af-branch" placeholder="main"/></label>'
         + '<button id="af-go">Ingest repo docs</button>';
     } else if (type === 'text' || type === 'reviews') {
@@ -1184,6 +1319,7 @@
   async function render() {
     if (!state.key) return renderLogin();
     var r = state.route;
+    if (r.page === 'forge') return renderForge();
     if (r.page === 'create') return renderCreate();
     if (r.page === 'app' && r.appId) return renderAppPage();
     return renderApps();
